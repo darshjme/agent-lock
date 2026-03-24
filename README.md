@@ -1,0 +1,169 @@
+# agent-lock
+
+**Distributed locking for multi-agent shared resource access.**
+
+Zero dependencies. Pure Python stdlib (`threading`, `os`). Production-grade.
+
+```bash
+pip install agent-lock
+```
+
+---
+
+## The Problem
+
+When multiple agents write to the same database row, file, or API endpoint simultaneously, you get race conditions and data corruption:
+
+```
+Agent 1: read balance=$100  → Agent 2: read balance=$100
+Agent 1: write balance=$150 → Agent 2: write balance=$80   # $50 lost!
+```
+
+`agent-lock` ensures only one agent accesses a resource at a time.
+
+---
+
+## Quick Start
+
+### In-Process Lock (multi-threaded agents)
+
+```python
+from agent_lock import Lock
+
+db_lock = Lock("user_balance", timeout_seconds=5.0)
+
+def update_balance(user_id, amount):
+    with db_lock:
+        balance = db.read(user_id)
+        db.write(user_id, balance + amount)
+```
+
+### LockRegistry (manage many resources)
+
+```python
+from agent_lock import LockRegistry, locked
+
+registry = LockRegistry(default_timeout=10.0)
+
+# Acquire/release manually
+registry.acquire("agent:file:/data/users.csv")
+try:
+    # ... work ...
+finally:
+    registry.release("agent:file:/data/users.csv")
+
+# Or use the decorator
+@locked(registry, "agent:api:stripe", timeout=5.0)
+def charge_customer(amount):
+    stripe.charge(amount)
+
+# What's currently locked?
+print(registry.locked_names())
+```
+
+### Shared Database Lock Example
+
+```python
+from agent_lock import LockRegistry, locked
+import sqlite3
+
+registry = LockRegistry(default_timeout=10.0)
+
+@locked(registry, "sqlite:transactions", timeout=5.0)
+def record_transaction(db_path: str, user_id: int, amount: float):
+    """Only one agent can write transactions at a time."""
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO transactions (user_id, amount) VALUES (?, ?)",
+        (user_id, amount)
+    )
+    conn.commit()
+    conn.close()
+
+# Multiple agents calling this concurrently — fully safe
+import threading
+threads = [
+    threading.Thread(target=record_transaction, args=("app.db", i, i * 10.5))
+    for i in range(20)
+]
+for t in threads:
+    t.start()
+for t in threads:
+    t.join()
+
+print(f"All 20 transactions recorded safely.")
+```
+
+### FileLock (cross-process coordination)
+
+```python
+from agent_lock import FileLock
+
+# Lock a shared config file across multiple processes
+with FileLock("/data/config.json", timeout_seconds=30.0):
+    with open("/data/config.json") as f:
+        config = json.load(f)
+    config["last_run"] = time.time()
+    with open("/data/config.json", "w") as f:
+        json.dump(config, f)
+# Lock released automatically — other processes can proceed
+```
+
+FileLock features:
+- **Atomic acquisition** via `os.link` (POSIX)
+- **Stale lock detection** — if the owning process dies, lock is cleared automatically
+- **PID tracking** in the lockfile for debugging
+
+---
+
+## API Reference
+
+### `Lock(name, timeout_seconds=10.0)`
+Reentrant in-process lock. Same thread can `acquire()` multiple times (must `release()` the same number of times).
+
+| Method/Property | Description |
+|----------------|-------------|
+| `acquire(timeout=None) -> bool` | Returns `False` if timeout exceeded |
+| `release()` | Release one level of reentrancy |
+| `is_locked -> bool` | Whether lock is currently held |
+| `owner -> int \| None` | Thread ident of current holder |
+| `with lock:` | Raises `LockTimeoutError` if can't acquire |
+
+### `LockRegistry(default_timeout=10.0)`
+
+| Method | Description |
+|--------|-------------|
+| `get(name) -> Lock` | Get or create a named lock |
+| `acquire(name, timeout=None) -> bool` | Acquire named lock |
+| `release(name)` | Release named lock |
+| `is_locked(name) -> bool` | Check lock state |
+| `locked_names() -> list[str]` | All currently held lock names |
+
+### `FileLock(filepath, timeout_seconds=10.0)`
+File-system lock — works across processes. Creates `<filepath>.lock`.
+
+### `@locked(registry, resource, timeout=10.0)`
+Decorator: acquires lock before call, releases after (even on exception).
+
+### `LockTimeoutError`
+Raised when a context manager or decorator can't acquire within timeout.
+```python
+except LockTimeoutError as e:
+    print(f"Lock '{e.name}' timed out after {e.timeout}s")
+```
+
+---
+
+## Design
+
+- **Zero dependencies** — only Python stdlib
+- **Thread-safe** by design throughout
+- **Reentrant** — same thread can nest acquisitions
+- **Timeout everywhere** — no deadlocks
+- **Stale lock recovery** — FileLock survives process crashes
+
+---
+
+## License
+
+MIT © Darshankumar Joshi
