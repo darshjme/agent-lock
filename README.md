@@ -4,20 +4,15 @@
 
 # agent-lock
 
-**Distributed locking for shared resources for LLM agents. Zero external dependencies.**
+**Distributed locking for multi-agent shared resource access**
 
-[![PyPI](https://img.shields.io/pypi/v/agent-lock?color=blue)](https://pypi.org/project/agent-lock/)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Zero deps](https://img.shields.io/badge/dependencies-zero-brightgreen)](pyproject.toml)
+[![PyPI version](https://img.shields.io/pypi/v/agent-lock?color=purple&style=flat-square)](https://pypi.org/project/agent-lock/) [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://python.org) [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE) [![Tests](https://img.shields.io/badge/tests-passing-brightgreen?style=flat-square)](#)
 
 ---
 
 ## The Problem
 
-Production LLM agents fail silently. Without distributed locking for shared resources, you get undefined behaviour at scale — race conditions, lost state, cascading failures, and no way to debug what went wrong.
-
-`agent-lock` gives you a production-ready distributed locking for shared resources primitive with a clean API, tested edge cases, and zero configuration.
+Without distributed locks, concurrent agents race to modify shared state — double-spending tokens, corrupting queues, or triggering duplicate tool calls. Correctness under concurrency is not accidental.
 
 ## Installation
 
@@ -25,88 +20,96 @@ Production LLM agents fail silently. Without distributed locking for shared reso
 pip install agent-lock
 ```
 
-Or from source:
-
-```bash
-git clone https://github.com/darshjme/agent-lock.git
-cd agent-lock
-pip install -e .
-```
-
 ## Quick Start
 
 ```python
-from agent_lock import *  # see API reference below
+from agent_lock import FileLock, LockTimeoutError, Lock
 
-# See examples/ directory for complete working examples
+# Initialise
+instance = FileLock(name="my_agent")
+
+# Use
+# see API reference below
+print(result)
 ```
 
 ## API Reference
 
-The main classes and functions are defined in `agent_lock/__init__.py`.
+### `FileLock`
 
-Key exports: `Lock · LockRegistry · FileLock · stale PID detection`
+```python
+class FileLock:
+    """File-system lock using atomic file creation for cross-process safety.
+    def __init__(self, filepath: str, timeout_seconds: float = 10.0):
+    def _write_lockfile_atomic(self) -> bool:
+        """Atomically create lockfile with current PID. Returns True if successful."""
+    def _read_lockfile_pid(self) -> Optional[int]:
+        """Read PID from existing lockfile. Returns None if unreadable."""
+    def _is_pid_alive(self, pid: int) -> bool:
+        """Check if a process with given PID is alive."""
+```
 
-All classes follow a consistent interface:
-- Instantiate with sensible defaults
-- Compose with other arsenal libraries
-- Zero external dependencies required
+### `LockTimeoutError`
 
-See the source code and `tests/` directory for verified usage examples.
+```python
+class LockTimeoutError(Exception):
+    """Raised when a lock cannot be acquired within the timeout period."""
+    def __init__(self, name: str, timeout: float):
+```
+
+### `Lock`
+
+```python
+class LockTimeoutError(Exception):
+    """Raised when a lock cannot be acquired within the timeout period."""
+    def __init__(self, name: str, timeout: float):
+class Lock:
+    def __init__(self, name: str, timeout_seconds: float = 10.0):
+    def acquire(self, timeout: Optional[float] = None) -> bool:
+        """Acquire the lock. Returns False if timeout exceeded."""
+    def release(self):
+        """Release the lock."""
+```
+
 
 ## How It Works
 
+### Flow
+
 ```mermaid
 flowchart LR
-    A[Agent Task] --> B[agent-lock]
-    B --> C{Decision}
-    C -->|success| D[✅ Result]
-    C -->|failure| E[⚠️ Handle]
-    E --> B
-
-    style B fill:#161b22,stroke:#f85149,stroke-width:2,color:#f85149
-    style D fill:#1a3320,stroke:#238636,color:#3fb950
-    style E fill:#3d1a1a,stroke:#f85149,color:#f85149
+    A[User Code] -->|create| B[FileLock]
+    B -->|configure| C[LockTimeoutError]
+    C -->|execute| D{Success?}
+    D -->|yes| E[Return Result]
+    D -->|no| F[Error Handler]
+    F --> G[Fallback / Retry]
+    G --> C
 ```
+
+### Sequence
 
 ```mermaid
 sequenceDiagram
-    participant Agent
-    participant AgentLock as agent-lock
-    participant Output
+    participant App
+    participant FileLock
+    participant LockTimeoutError
 
-    Agent->>AgentLock: initialize()
-    AgentLock-->>Agent: ready
-
-    loop Agent Run
-        Agent->>AgentLock: process(input)
-        AgentLock-->>Agent: result
-    end
-
-    Agent->>Output: deliver(result)
+    App->>+FileLock: initialise()
+    FileLock->>+LockTimeoutError: configure()
+    LockTimeoutError-->>-FileLock: ready
+    App->>+FileLock: run(context)
+    FileLock->>+LockTimeoutError: execute(context)
+    LockTimeoutError-->>-FileLock: result
+    FileLock-->>-App: WorkflowResult
 ```
 
 ## Philosophy
 
-The chakravyuha could only be entered by one. agent-lock enforces that discipline on shared resources.
+> *Ekāgratā* — single-pointed focus — is the lock that prevents distraction from entering the critical section.
 
 ---
 
-## Part of the Arsenal
-
-`agent-lock` is one of six production libraries for LLM agents:
-
-| Library | Purpose |
-|---------|---------|
-| [herald](https://github.com/darshjme/herald) | Semantic task routing |
-| [engram](https://github.com/darshjme/engram) | Agent memory |
-| [sentinel](https://github.com/darshjme/sentinel) | ReAct loop guards |
-| [verdict](https://github.com/darshjme/verdict) | Agent evaluation |
-| [agent-guardrails](https://github.com/darshjme/agent-guardrails) | Output validation |
-| [agent-observability](https://github.com/darshjme/agent-observability) | Tracing & metrics |
-
-→ [arsenal](https://github.com/darshjme/arsenal) — the complete stack
-
----
+*Part of the [arsenal](https://github.com/darshjme/arsenal) — production stack for LLM agents.*
 
 *Built by [Darshankumar Joshi](https://github.com/darshjme), Gujarat, India.*
