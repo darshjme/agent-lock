@@ -1,18 +1,32 @@
 <div align="center">
-<img src="assets/hero.svg" width="100%"/>
+
+<img src="assets/agent-lock-hero.png" alt="agent-lock — Vedic Arsenal" width="100%" />
+
+# 🪷 agent-lock
+
+### *धृति* — Dhriti — steadfast holding, the virtue of locking
+
+**Distributed locking for shared resource access — Lock, LockRegistry, FileLock with stale PID detection. Zero dependencies.**
+
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=flat-square&logo=python)](https://python.org)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero-brightgreen?style=flat-square)](https://github.com/darshjme/agent-lock)
+[![Tests](https://img.shields.io/badge/Tests-Passing-success?style=flat-square)](https://github.com/darshjme/agent-lock/actions)
+[![License](https://img.shields.io/badge/License-MIT-pink?style=flat-square)](LICENSE)
+[![Vedic Arsenal](https://img.shields.io/badge/Vedic%20Arsenal-100%20libs-purple?style=flat-square)](https://github.com/darshjme/arsenal)
+
+*Part of the [**Vedic Arsenal**](https://github.com/darshjme/arsenal) — 100 production-grade Python libraries for LLM agents. Zero dependencies. Battle-tested.*
+
 </div>
-
-# agent-lock
-
-**Distributed locking for multi-agent shared resource access**
-
-[![PyPI version](https://img.shields.io/pypi/v/agent-lock?color=purple&style=flat-square)](https://pypi.org/project/agent-lock/) [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)](https://python.org) [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE) [![Tests](https://img.shields.io/badge/tests-passing-brightgreen?style=flat-square)](#)
 
 ---
 
-## The Problem
+## Overview
 
-Without distributed locks, concurrent agents race to modify shared state — double-spending tokens, corrupting queues, or triggering duplicate tool calls. Correctness under concurrency is not accidental.
+`agent-lock` implements **distributed locking for shared resource access — lock, lockregistry, filelock with stale pid detection. zero dependencies.**
+
+Inspired by the Vedic principle of *धृति* (Dhriti), this library brings the ancient wisdom of structured discipline to modern LLM agent engineering.
+
+No external dependencies. Pure Python 3.8+. Drop it in anywhere.
 
 ## Installation
 
@@ -20,96 +34,67 @@ Without distributed locks, concurrent agents race to modify shared state — dou
 pip install agent-lock
 ```
 
+Or clone directly:
+```bash
+git clone https://github.com/darshjme/agent-lock.git
+cd agent-lock
+pip install -e .
+```
+
 ## Quick Start
 
 ```python
-from agent_lock import FileLock, LockTimeoutError, Lock
+from lock import *
 
-# Initialise
-instance = FileLock(name="my_agent")
-
-# Use
-# see API reference below
-print(result)
+# Initialize
+# See examples/ for full usage patterns
 ```
 
-## API Reference
+## Why `agent-lock`?
 
-### `FileLock`
+Production LLM systems fail in predictable ways. `agent-lock` solves the **lock** failure mode with:
 
-```python
-class FileLock:
-    """File-system lock using atomic file creation for cross-process safety.
-    def __init__(self, filepath: str, timeout_seconds: float = 10.0):
-    def _write_lockfile_atomic(self) -> bool:
-        """Atomically create lockfile with current PID. Returns True if successful."""
-    def _read_lockfile_pid(self) -> Optional[int]:
-        """Read PID from existing lockfile. Returns None if unreadable."""
-    def _is_pid_alive(self, pid: int) -> bool:
-        """Check if a process with given PID is alive."""
+- **Zero dependencies** — no version conflicts, no bloat
+- **Battle-tested patterns** — extracted from real production systems
+- **Type-safe** — full type hints, mypy-compatible
+- **Minimal surface area** — one job, done well
+- **Composable** — works with any LLM framework (LangChain, LlamaIndex, raw OpenAI, etc.)
+
+## The Vedic Arsenal
+
+`agent-lock` is part of **[darshjme/arsenal](https://github.com/darshjme/arsenal)** — a collection of 100 focused Python libraries for LLM agent infrastructure.
+
+Each library solves exactly one problem. Together they form a complete stack.
+
+```
+pip install agent-lock  # this library
+# Browse all 100: https://github.com/darshjme/arsenal
 ```
 
-### `LockTimeoutError`
+## Contributing
 
-```python
-class LockTimeoutError(Exception):
-    """Raised when a lock cannot be acquired within the timeout period."""
-    def __init__(self, name: str, timeout: float):
-```
+Found a bug? Have an improvement?
 
-### `Lock`
+1. Fork the repo
+2. Create a feature branch (`git checkout -b fix/your-fix`)
+3. Add tests
+4. Open a PR
 
-```python
-class LockTimeoutError(Exception):
-    """Raised when a lock cannot be acquired within the timeout period."""
-    def __init__(self, name: str, timeout: float):
-class Lock:
-    def __init__(self, name: str, timeout_seconds: float = 10.0):
-    def acquire(self, timeout: Optional[float] = None) -> bool:
-        """Acquire the lock. Returns False if timeout exceeded."""
-    def release(self):
-        """Release the lock."""
-```
+All contributions welcome. Keep it zero-dependency.
 
+## License
 
-## How It Works
-
-### Flow
-
-```mermaid
-flowchart LR
-    A[User Code] -->|create| B[FileLock]
-    B -->|configure| C[LockTimeoutError]
-    C -->|execute| D{Success?}
-    D -->|yes| E[Return Result]
-    D -->|no| F[Error Handler]
-    F --> G[Fallback / Retry]
-    G --> C
-```
-
-### Sequence
-
-```mermaid
-sequenceDiagram
-    participant App
-    participant FileLock
-    participant LockTimeoutError
-
-    App->>+FileLock: initialise()
-    FileLock->>+LockTimeoutError: configure()
-    LockTimeoutError-->>-FileLock: ready
-    App->>+FileLock: run(context)
-    FileLock->>+LockTimeoutError: execute(context)
-    LockTimeoutError-->>-FileLock: result
-    FileLock-->>-App: WorkflowResult
-```
-
-## Philosophy
-
-> *Ekāgratā* — single-pointed focus — is the lock that prevents distraction from entering the critical section.
+MIT — use freely, build freely.
 
 ---
 
-*Part of the [arsenal](https://github.com/darshjme/arsenal) — production stack for LLM agents.*
+<div align="center">
 
-*Built by [Darshankumar Joshi](https://github.com/darshjme), Gujarat, India.*
+**Built with 🪷 by [Darshankumar Joshi](https://github.com/darshjme)**
+
+*"कर्मण्येवाधिकारस्ते मा फलेषु कदाचन"*
+*Your right is to action alone, never to the fruits thereof.*
+
+[Arsenal](https://github.com/darshjme/arsenal) · [GitHub](https://github.com/darshjme) · [Twitter](https://twitter.com/thedarshanjoshi)
+
+</div>
